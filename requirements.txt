@@ -1,0 +1,26 @@
+# CFO Chatbot - Dependencies
+# Python 3.9+ required
+
+# Web Framework
+streamlit>=1.31.0
+
+# OpenAI & LangChain
+openai>=1.12.0
+langchain>=0.1.9
+langchain-community>=0.0.24
+langchain-openai>=0.0.6
+
+# PDF Processing
+pypdf2>=3.0.1
+pdfplumber>=0.10.3
+
+# Vector Store
+faiss-cpu>=1.7.4
+
+# Utilities
+python-dotenv>=1.0.0
+tiktoken>=0.6.0
+
+# Optional: For better PDF extraction
+# Pillow>=10.2.0
+# pytesseract>=0.3.10  # Requires tesseract-ocr system package
