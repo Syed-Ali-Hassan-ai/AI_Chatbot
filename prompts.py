@@ -77,7 +77,7 @@ CONTEXT_PROMPT_TEMPLATE = """Based on the following excerpts from the global fin
 {context}
 
 **User Question:**
-{question}
+{input}
 
 **Instructions:**
 - Only use information from the context above

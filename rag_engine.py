@@ -12,9 +12,10 @@ from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_openai import OpenAIEmbeddings, ChatOpenAI
 from langchain_community.vectorstores import FAISS
-from langchain.chains import ConversationalRetrievalChain
-from langchain.memory import ConversationBufferMemory
-from langchain.prompts import PromptTemplate
+from langchain.chains import create_retrieval_chain
+from langchain.chains.combine_documents import create_stuff_documents_chain
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain_core.messages import HumanMessage, AIMessage
 from langchain.schema import Document
 
 from config import config
@@ -32,7 +33,7 @@ class RAGEngine:
         self.vector_store = None
         self.llm = None
         self.qa_chain = None
-        self.memory = None
+        self.chat_history = []  # Store chat history as list of messages
 
     def load_and_process_pdfs(self) -> List[Document]:
         """
@@ -162,28 +163,22 @@ class RAGEngine:
             openai_api_key=config.OPENAI_API_KEY
         )
 
-        # Initialize memory
-        self.memory = ConversationBufferMemory(
-            memory_key="chat_history",
-            return_messages=True,
-            output_key="answer"
-        )
+        # Create prompt with chat history support
+        qa_prompt = ChatPromptTemplate.from_messages([
+            ("system", SYSTEM_PROMPT),
+            MessagesPlaceholder("chat_history"),
+            ("human", CONTEXT_PROMPT_TEMPLATE)
+        ])
 
-        # Create QA chain
-        self.qa_chain = ConversationalRetrievalChain.from_llm(
-            llm=self.llm,
-            retriever=self.vector_store.as_retriever(
+        # Create document chain
+        question_answer_chain = create_stuff_documents_chain(self.llm, qa_prompt)
+
+        # Create retrieval chain
+        self.qa_chain = create_retrieval_chain(
+            self.vector_store.as_retriever(
                 search_kwargs={"k": config.RETRIEVAL_K}
             ),
-            memory=self.memory,
-            return_source_documents=True,
-            verbose=False,
-            combine_docs_chain_kwargs={
-                "prompt": PromptTemplate(
-                    template=SYSTEM_PROMPT + "\n\n" + CONTEXT_PROMPT_TEMPLATE,
-                    input_variables=["context", "question"]
-                )
-            }
+            question_answer_chain
         )
 
         status += "\n✓ CFO Bot ready!"
@@ -197,12 +192,19 @@ class RAGEngine:
         if self.qa_chain is None:
             raise ValueError("RAG engine not initialized. Call initialize() first.")
 
-        # Get response from chain
-        response = self.qa_chain({"question": question})
+        # Get response from chain using invoke()
+        response = self.qa_chain.invoke({
+            "input": question,
+            "chat_history": self.chat_history
+        })
 
         # Extract answer and sources
         answer = response['answer']
-        source_documents = response.get('source_documents', [])
+        source_documents = response.get('context', [])
+
+        # Update chat history
+        self.chat_history.append(HumanMessage(content=question))
+        self.chat_history.append(AIMessage(content=answer))
 
         # Format sources
         sources = []
@@ -227,16 +229,12 @@ class RAGEngine:
 
     def reset_conversation(self):
         """Reset conversation memory."""
-        if self.memory:
-            self.memory.clear()
+        self.chat_history = []
 
     def get_conversation_history(self) -> List[Dict]:
         """Get conversation history."""
-        if self.memory is None:
-            return []
-
         history = []
-        for message in self.memory.chat_memory.messages:
+        for message in self.chat_history:
             history.append({
                 'type': message.type,
                 'content': message.content
