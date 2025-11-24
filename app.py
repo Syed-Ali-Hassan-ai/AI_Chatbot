@@ -3,6 +3,10 @@ CFO Chatbot - Streamlit Application
 A RAG-based chatbot that acts as CFO for a global financial architecture.
 """
 
+# Fix for OpenMP Error #15 - Must be set before any library imports
+import os
+os.environ['KMP_DUPLICATE_LIB_OK'] = 'TRUE'
+
 import streamlit as st
 from typing import List, Dict
 import sys
